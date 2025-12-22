@@ -102,8 +102,6 @@ public class HttpIO : IAsyncIOStreamProvider, IDisposable
 
   public async Task WriteAsync(Stream stream, CancellationToken cancellationToken = default)
   {
-    stream.Position = 0;
-
     using var content = new StreamContent(stream)
     {
       Headers = { ContentLength = WriteHeaders.ContentLength ?? stream.Length }

@@ -191,24 +191,34 @@ public class SaveFile<TData> : ISaveFile<TData> where TData : class
   /// <inheritdoc />
   public async ValueTask SaveAsync(CompressionLevel compressionLevel = default, CancellationToken cancellationToken = default)
   {
-    await using var ioStream = _asyncIO is not null
-      ? new MemoryStream()
-      : _io!.Write();
-
-    await using var compressionStream = _compressor?.CompressionStream(ioStream, compressionLevel);
-
-    if (_asyncSerializer is not null)
+    if (_asyncIO is null)
     {
-      await _asyncSerializer.SerializeAsync(compressionStream ?? ioStream, Root.GetSaveData(), cancellationToken);
+      await using var ioStream = _io!.Write();
+      await using var compressionStream = _compressor?.CompressionStream(ioStream, compressionLevel);
+      await serialize(compressionStream ?? ioStream);
     }
     else
     {
-      _serializer!.Serialize(compressionStream ?? ioStream, Root.GetSaveData());
+      await using var writeStream = new MemoryStream();
+      await using (var compressionStream = _compressor?.CompressionStream(writeStream, compressionLevel, true))
+      {
+        await serialize(compressionStream ?? writeStream);
+      }
+      writeStream.Position = 0;
+
+      await _asyncIO.WriteAsync(writeStream, cancellationToken);
     }
 
-    if (_asyncIO is not null)
+    async Task serialize(Stream stream)
     {
-      await _asyncIO.WriteAsync(ioStream, cancellationToken);
+      if (_asyncSerializer is not null)
+      {
+        await _asyncSerializer.SerializeAsync(stream, Root.GetSaveData(), cancellationToken);
+      }
+      else
+      {
+        _serializer!.Serialize(stream, Root.GetSaveData());
+      }
     }
   }
 
